@@ -53,7 +53,7 @@ function train_lssvm(X, y, train)
 	mach = machine(self_tuning_model, X, y)
 	fit!(mach, rows=train, verbosity=0)
 	
-	return nothing
+	return mach
 end;
 
 # ╔═╡ 5973126c-5ffe-11eb-2219-85731b9c0786
@@ -74,7 +74,7 @@ function train_svm(X, y, train)
 	mach = machine(self_tuning_model, X, y)
 	fit!(mach, rows=train, verbosity=0)
 	
-	return nothing
+	return mach
 end;
 
 # ╔═╡ 5e76126c-5ffe-11eb-2b0b-6fe6136909c5
@@ -83,10 +83,39 @@ Xstd = MLJ.transform(MLJ.fit!(MLJ.machine(Standardizer(), X)), X);
 # ╔═╡ 5e3c2068-5ffe-11eb-3173-59eb4527939f
 @benchmark train_lssvm($Xstd, $y, $train)
 
+# ╔═╡ 66054bac-6002-11eb-063c-5525eb2a0ca1
+mach1 = train_lssvm(Xstd, y, train);
+
 # ╔═╡ 5e286ffa-5ffe-11eb-22c3-2bba58505b97
 @benchmark train_svm($Xstd, $y, $train)
 
+# ╔═╡ 6e868db0-6002-11eb-0cc1-edf2da791ccb
+mach2 = train_svm(Xstd, y, train);
+
 # ╔═╡ 5e0dc6e6-5ffe-11eb-0b25-8fa52bd3cfc1
+function predict_model(y, test, mach)
+	results = MLJ.predict(mach, rows=test)
+	acc = MLJ.accuracy(results, y[test])
+	
+	return acc
+end;
+
+# ╔═╡ c55d8cb4-6001-11eb-2e6b-655ac8539748
+@benchmark predict_model($y, $test, $mach1)
+
+# ╔═╡ 949df2e8-6002-11eb-14cb-e5a269cf2846
+acc1 = predict_model(y, test, mach1)
+
+# ╔═╡ c5477f70-6001-11eb-3a08-87356dfbbd29
+@benchmark predict_model($y, $test, $mach2)
+
+# ╔═╡ c53166f2-6001-11eb-19d9-5d104a8e7107
+acc2 = predict_model(y, test, mach2)
+
+# ╔═╡ c4d94f5a-6001-11eb-2d11-5da129bacc2d
+
+
+# ╔═╡ c4c13726-6001-11eb-277a-910dd8343dc1
 
 
 # ╔═╡ 5df6ace0-5ffe-11eb-2e3c-d9239d9f8825
@@ -141,8 +170,16 @@ Xstd = MLJ.transform(MLJ.fit!(MLJ.machine(Standardizer(), X)), X);
 # ╠═5973126c-5ffe-11eb-2219-85731b9c0786
 # ╠═5e76126c-5ffe-11eb-2b0b-6fe6136909c5
 # ╠═5e3c2068-5ffe-11eb-3173-59eb4527939f
+# ╠═66054bac-6002-11eb-063c-5525eb2a0ca1
 # ╠═5e286ffa-5ffe-11eb-22c3-2bba58505b97
+# ╠═6e868db0-6002-11eb-0cc1-edf2da791ccb
 # ╠═5e0dc6e6-5ffe-11eb-0b25-8fa52bd3cfc1
+# ╠═c55d8cb4-6001-11eb-2e6b-655ac8539748
+# ╠═949df2e8-6002-11eb-14cb-e5a269cf2846
+# ╠═c5477f70-6001-11eb-3a08-87356dfbbd29
+# ╠═c53166f2-6001-11eb-19d9-5d104a8e7107
+# ╠═c4d94f5a-6001-11eb-2d11-5da129bacc2d
+# ╠═c4c13726-6001-11eb-277a-910dd8343dc1
 # ╠═5df6ace0-5ffe-11eb-2e3c-d9239d9f8825
 # ╠═5de00670-5ffe-11eb-1e3b-b5d9fa3fca77
 # ╠═5dc91bfc-5ffe-11eb-34b9-b56bbda3dae3
