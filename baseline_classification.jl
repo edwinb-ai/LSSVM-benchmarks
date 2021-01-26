@@ -126,7 +126,7 @@ function train_lssvm_hp(X, y, train)
 	
 	self_tuning_model = TunedModel(
 		model=model,
-		tuning=Grid(goal=500),
+		tuning=Grid(goal=625),
 		resampling=CV(nfolds=5),
 		range=[r1, r2],
 		measure=accuracy
@@ -147,7 +147,7 @@ function train_svm_hp(X, y, train)
 	
 	self_tuning_model = TunedModel(
 		model=model,
-		tuning=Grid(goal=500),
+		tuning=Grid(goal=625),
 		resampling=CV(nfolds=5),
 		range=[r1, r2],
 		measure=accuracy
@@ -263,21 +263,82 @@ Each model has to tune **two** hyperparameters:
 - an _intrinsic_ one; _cost_ for the `libSVM` and _γ_ for the `LeastSquaresSVM`,
 - the kernel hyperparameter; both models are using the same RBF kernel.
 
-Each model will search for the best pair of hyperparameters in a grid of
-$[75 \times 75]$ for a total of 1500 points in the grid.
+Each model will search for the best pair of hyperparameters in a 
+square grid of 625 points. That is, 25 values for each hyperparameter.
+
+It might seem like very few elements, but keep in mind that no parallelization
+is used for this search (which normally it is recommended to do).
+To make the comparison fair, we are doing this in a single thread, for each
+model.
+
+The performance metric will be the classification _accuracy._
 """
 
 # ╔═╡ 5e3c2068-5ffe-11eb-3173-59eb4527939f
-@benchmark train_lssvm_hp($Xstd, $y, $train) samples=3
+t1 = @benchmark train_lssvm_hp($Xstd, $y, $train)
 
-# ╔═╡ 66054bac-6002-11eb-063c-5525eb2a0ca1
-mach1 = train_lssvm_hp(Xstd, y, train);
+# ╔═╡ da5d6972-602b-11eb-3cce-a50ed90928e0
+md"""
+#### Memory allocations
+
+Well, this is not a surprise. For each pair of points, a model is trained.
+The whole dataset set (the training portion of it) is used each time. For now
+it is only comprised of $(length(train)) data instances. But imagine how large
+can this grow for datasets with more than just 150 data samples.
+
+This is one of the reasons why the least squares formulation is not the popular
+one. Even though it is very simple to implement, it consumes memory like there
+is no tomorrow.
+
+#### Time estimation
+
+This is quite a surprise. I seriously did not expect it to perform as well as
+it does.
+It is fast, efficient, but I think this is mostly due to the nature of the iterative
+solver it uses.
+If a more direct approach were used, I firmly believe the running time would have
+blown up.
+"""
 
 # ╔═╡ 5e286ffa-5ffe-11eb-22c3-2bba58505b97
-@benchmark train_svm_hp($Xstd, $y, $train)
+t2 = @benchmark train_svm_hp($Xstd, $y, $train)
 
-# ╔═╡ 6e868db0-6002-11eb-0cc1-edf2da791ccb
-mach2 = train_svm_hp(Xstd, y, train);
+# ╔═╡ abe9a28a-602c-11eb-18a9-493b4b05d461
+md"""
+#### Memory allocations
+
+Again, this is not a surprise. By using just a few data instances, the `libSVM`
+implementation is _very_ conservative, memory-wise.
+
+Do note, however, that the difference in memory usage is mind-blowing.
+The difference between this implementation and the least squares one is
+$(round(t1.memory / t2.memory; digits=4)) smaller.
+
+#### Time estimation
+
+This is really the weird part. I would have expected that this implementation
+would be faster.
+Maybe it has something to do with the number of samples from the benchmark.
+Anyway, the results show that both implementations are equivalent.
+
+This is great news, because it means that no matter which implementation you use,
+you will always have your results in a timely manner.
+You can choose between both implementations and the prediction time is almost the
+same.
+"""
+
+# ╔═╡ 00fdae46-601a-11eb-1db6-e73e0f4ead1e
+md"""
+## Prediction
+
+In this last section I just wanted to show the prediction time for both
+implementations.
+
+We are assuming that both models have been tuned correctly.
+
+First, I will wrap the prediction steps in a function, evaluation the
+_accuracy_ of prediction for each model.
+"""
 
 # ╔═╡ 5e0dc6e6-5ffe-11eb-0b25-8fa52bd3cfc1
 function predict_model(y, test, mach)
@@ -287,11 +348,30 @@ function predict_model(y, test, mach)
 	return acc
 end;
 
+# ╔═╡ 61c5201a-602e-11eb-15a7-1f0334dfa695
+md"""
+I need a tuned least squares SVM, so I do that first.
+"""
+
+# ╔═╡ 66054bac-6002-11eb-063c-5525eb2a0ca1
+mach1 = train_lssvm_hp(Xstd, y, train);
+
 # ╔═╡ c55d8cb4-6001-11eb-2e6b-655ac8539748
 @benchmark predict_model($y, $test, $mach1)
 
 # ╔═╡ 949df2e8-6002-11eb-14cb-e5a269cf2846
 acc1 = predict_model(y, test, mach1)
+
+# ╔═╡ 77449dee-602e-11eb-3d23-6baa12c216c1
+md"""
+### Results for least squares implementation
+
+Good accuracy, as expected. Very high memory consumption, as expected.
+The running time is quite high, but nothing to really worry about.
+"""
+
+# ╔═╡ 6e868db0-6002-11eb-0cc1-edf2da791ccb
+mach2 = train_svm_hp(Xstd, y, train);
 
 # ╔═╡ c5477f70-6001-11eb-3a08-87356dfbbd29
 @benchmark predict_model($y, $test, $mach2)
@@ -299,50 +379,29 @@ acc1 = predict_model(y, test, mach1)
 # ╔═╡ c53166f2-6001-11eb-19d9-5d104a8e7107
 acc2 = predict_model(y, test, mach2)
 
-# ╔═╡ c4d94f5a-6001-11eb-2d11-5da129bacc2d
+# ╔═╡ a75bd45c-602e-11eb-3206-8b097f43be6c
+md"""
+### Results for `libSVM` implementation
 
+Good accuracy, as expected. Low memory consumption, as expected.
 
-# ╔═╡ c4c13726-6001-11eb-277a-910dd8343dc1
+Now, regarding the running time, this is definetely what I was expecting
+on the _training_ step. We can clearly see, by comparing the median time between
+both benchmarks, that the `libSVM` implementation is almost **twice** as fast
+as the least squares implementation.
 
+If it is using less data, that means less computations. But also, recall that this
+solver (and code) is very optimized.
 
-# ╔═╡ 5df6ace0-5ffe-11eb-2e3c-d9239d9f8825
+## Conclusions
 
+Most of the results presented here represent a baseline benchmark result on a simple
+multiclass classification problem.
 
-# ╔═╡ 5de00670-5ffe-11eb-1e3b-b5d9fa3fca77
-
-
-# ╔═╡ 5dc91bfc-5ffe-11eb-34b9-b56bbda3dae3
-
-
-# ╔═╡ 5db23042-5ffe-11eb-0674-6582ebdcebf7
-
-
-# ╔═╡ 5d963f86-5ffe-11eb-2a1f-2b1fc3ee9e42
-
-
-# ╔═╡ 5d7c9e6e-5ffe-11eb-2e96-1fce4d8fe9d4
-
-
-# ╔═╡ 5d659dd6-5ffe-11eb-231b-1b067477d9f2
-
-
-# ╔═╡ 5d4ba0b6-5ffe-11eb-1942-89b9c27cfd3e
-
-
-# ╔═╡ 5d30d6fa-5ffe-11eb-07f0-9baa93e3e25c
-
-
-# ╔═╡ 5d16ccae-5ffe-11eb-3f0c-43cb5281ce17
-
-
-# ╔═╡ 5cf6eafa-5ffe-11eb-2f02-33e7b1f34f33
-
-
-# ╔═╡ 5cd047fe-5ffe-11eb-2e11-abad1cb7ba45
-
-
-# ╔═╡ 5c85908a-5ffe-11eb-1407-f311ce238968
-
+The results are expected in most cases. Although it is good to see the
+`LeastSquaresSVM` doing well on the running time, both in _training_ and in
+_prediction._
+"""
 
 # ╔═╡ Cell order:
 # ╟─b84726f0-6003-11eb-2e0d-6f14682c9588
@@ -369,28 +428,19 @@ acc2 = predict_model(y, test, mach2)
 # ╟─85b1dd2c-6008-11eb-0689-9572c7411b30
 # ╠═0a75a496-6005-11eb-2135-eb8b6d4d106f
 # ╟─8ee94646-6008-11eb-089a-7b2ea0a9497b
-# ╠═f6c9278a-6009-11eb-300b-1fb5f3a9ad13
+# ╟─f6c9278a-6009-11eb-300b-1fb5f3a9ad13
 # ╠═5e3c2068-5ffe-11eb-3173-59eb4527939f
-# ╠═66054bac-6002-11eb-063c-5525eb2a0ca1
+# ╟─da5d6972-602b-11eb-3cce-a50ed90928e0
 # ╠═5e286ffa-5ffe-11eb-22c3-2bba58505b97
-# ╠═6e868db0-6002-11eb-0cc1-edf2da791ccb
+# ╟─abe9a28a-602c-11eb-18a9-493b4b05d461
+# ╟─00fdae46-601a-11eb-1db6-e73e0f4ead1e
 # ╠═5e0dc6e6-5ffe-11eb-0b25-8fa52bd3cfc1
+# ╟─61c5201a-602e-11eb-15a7-1f0334dfa695
+# ╠═66054bac-6002-11eb-063c-5525eb2a0ca1
 # ╠═c55d8cb4-6001-11eb-2e6b-655ac8539748
 # ╠═949df2e8-6002-11eb-14cb-e5a269cf2846
+# ╟─77449dee-602e-11eb-3d23-6baa12c216c1
+# ╠═6e868db0-6002-11eb-0cc1-edf2da791ccb
 # ╠═c5477f70-6001-11eb-3a08-87356dfbbd29
 # ╠═c53166f2-6001-11eb-19d9-5d104a8e7107
-# ╠═c4d94f5a-6001-11eb-2d11-5da129bacc2d
-# ╠═c4c13726-6001-11eb-277a-910dd8343dc1
-# ╠═5df6ace0-5ffe-11eb-2e3c-d9239d9f8825
-# ╠═5de00670-5ffe-11eb-1e3b-b5d9fa3fca77
-# ╠═5dc91bfc-5ffe-11eb-34b9-b56bbda3dae3
-# ╠═5db23042-5ffe-11eb-0674-6582ebdcebf7
-# ╠═5d963f86-5ffe-11eb-2a1f-2b1fc3ee9e42
-# ╠═5d7c9e6e-5ffe-11eb-2e96-1fce4d8fe9d4
-# ╠═5d659dd6-5ffe-11eb-231b-1b067477d9f2
-# ╠═5d4ba0b6-5ffe-11eb-1942-89b9c27cfd3e
-# ╠═5d30d6fa-5ffe-11eb-07f0-9baa93e3e25c
-# ╠═5d16ccae-5ffe-11eb-3f0c-43cb5281ce17
-# ╠═5cf6eafa-5ffe-11eb-2f02-33e7b1f34f33
-# ╠═5cd047fe-5ffe-11eb-2e11-abad1cb7ba45
-# ╠═5c85908a-5ffe-11eb-1407-f311ce238968
+# ╟─a75bd45c-602e-11eb-3206-8b097f43be6c
