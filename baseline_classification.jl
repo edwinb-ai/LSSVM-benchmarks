@@ -38,8 +38,21 @@ This is a very simple and easy dataset, and we will deal with larger datasets
 in another document elsewhere.
 """
 
+# ╔═╡ 5d73b9a0-6005-11eb-2ee6-2164f4169fea
+md"""
+First, some imports and all that good stuff.
+"""
+
 # ╔═╡ 143d4bd4-5ffe-11eb-23dc-1751a1913a05
 @load SVC pkg=LIBSVM
+
+# ╔═╡ 6a111cfe-6005-11eb-15df-875c96454e44
+md"""
+## Loading the dataset
+
+We now load the dataset, and we'll convert it to a `DataFrame` to inspect it.
+We just want to check that the `scitypes` are correct.
+"""
 
 # ╔═╡ 281afffa-5ffd-11eb-24ce-219f746515da
 X, y = @load_iris;
@@ -53,8 +66,36 @@ dfIris.y = y;
 # ╔═╡ 878df3be-5ffd-11eb-2b19-7f74692d0189
 first(dfIris, 3)
 
+# ╔═╡ 8c358782-6005-11eb-2787-8b32b5749b57
+md"""
+## Training setup
+
+Great, so everything looks good with the dataset.
+Let us now setup the dataset for training and testing. We'll do a 60-40% split
+on this dataset.
+Recall that this dataset only has 150 datasamples. We also always shuffle the
+splitting.
+"""
+
 # ╔═╡ 2bbc10ce-6000-11eb-2162-398983b5cf48
 train, test = partition(eachindex(y), 0.6, shuffle=true);
+
+# ╔═╡ cb51aff4-6005-11eb-1a7e-6b229f087a31
+md"""
+## Training functions
+
+To correctly benchmark the training steps, we need to setup and create some
+functions that collect all the training logic.
+
+Here, we are doing two pairs of functions, one _without_ hyperparameter tuning
+and the other _with_ tuning.
+You can tell them apart because the ones _with_ hyperparameter tuning have
+the suffix `hp`.
+
+Also, to differentiate between both implementations, `svm` corresponds to the
+`libsvm` implementation. On the other hand, `lssvm` corresponds to the
+`LeastSquaresSVM` implementation.
+"""
 
 # ╔═╡ f6f1ffe8-6004-11eb-0d26-3d51bcb24d61
 function train_lssvm(X, y, train)
@@ -81,18 +122,18 @@ function train_lssvm_hp(X, y, train)
 	model = LSSVClassifier()
 	
 	r1 = range(model, :σ, lower=1e-2, upper=10.0)
-	r2 = range(model, :γ, lower=1, upper=150)
+	r2 = range(model, :γ, lower=1, upper=200.0)
 	
 	self_tuning_model = TunedModel(
 		model=model,
-		tuning=RandomSearch(),
+		tuning=Grid(goal=500),
 		resampling=CV(nfolds=5),
 		range=[r1, r2],
 		measure=accuracy
 	)
 	
 	mach = machine(self_tuning_model, X, y)
-	fit!(mach, rows=train, verbosity=0)
+	fit!(mach, rows=train)
 	
 	return mach
 end;
@@ -106,29 +147,128 @@ function train_svm_hp(X, y, train)
 	
 	self_tuning_model = TunedModel(
 		model=model,
-		tuning=RandomSearch(),
+		tuning=Grid(goal=500),
 		resampling=CV(nfolds=5),
 		range=[r1, r2],
 		measure=accuracy
 	)
 	
 	mach = machine(self_tuning_model, X, y)
-	fit!(mach, rows=train, verbosity=0)
+	fit!(mach, rows=train)
 	
 	return mach
 end;
 
+# ╔═╡ 2ee014fc-6006-11eb-367a-dbc9f9f97225
+md"""
+## Dataset prep
+
+With that out of the way, we need to remove the mean from the dataset, as
+well as setting its standard deviation to one.
+This is referred to as **standardizing** the dataset, and `MLJ` already has
+a model for such tasks.
+
+We'll standardize our model before feeding it to our models, because SVMs
+are quite picky of non-standardized data.
+"""
+
 # ╔═╡ 5e76126c-5ffe-11eb-2b0b-6fe6136909c5
 Xstd = MLJ.transform(MLJ.fit!(MLJ.machine(Standardizer(), X)), X);
+
+# ╔═╡ 6f0d1bec-6006-11eb-106b-bd780f26fef9
+md"""
+## Benchmarking
+
+Let's begin with benchmarking.
+
+### Without tuning
+
+First, let's do a baseline benchmark, _without_ hyperparameter tuning.
+Here, we are looking for time and space estimations for both implementations.
+
+We'll start with the `LeastSquaresSVM` implementation.
+"""
 
 # ╔═╡ 0ab3cf70-6005-11eb-3f80-03a804a70776
 @benchmark train_lssvm($Xstd, $y, $train)
 
+# ╔═╡ ad027e4a-6006-11eb-3ae1-f11f7d5fecdd
+md"""
+#### Memory allocation
+
+Right out of the bat, we can see that there is quite a lot of allocation.
+In the order of KiB it might not seem much, but this will surely be
+more promiment in the hyperparameter tuning estimations.
+
+This is expected due to the following reasons:
+
+- This formulation will **always** need **all** the dataset for both training and testing.
+- The solver (conjugate gradient, the iterative formulation) has to deal with allocations due to having to create a basis for each iteration.
+
+#### Time estimation
+
+Following the [manual for `BenchmarkTools`](https://github.com/JuliaCI/BenchmarkTools.jl/blob/master/doc/manual.md#which-estimator-should-i-use) we will use the **median** as out metric for
+comparing both models. This is because it is not really affected by
+noise or some other type of outliers.
+"""
+
+# ╔═╡ 85b1dd2c-6008-11eb-0689-9572c7411b30
+md"""
+With this in mind our median time is of ≈ 400 microseconds, which is pretty okay.
+Some of this might come from some compiler optimizations and clever machine
+code.
+
+We'll move on to the next implementation to have something to compare it with.
+"""
+
 # ╔═╡ 0a75a496-6005-11eb-2135-eb8b6d4d106f
 @benchmark train_svm($Xstd, $y, $train)
 
+# ╔═╡ 8ee94646-6008-11eb-089a-7b2ea0a9497b
+md"""
+#### Memory allocation
+
+Wow, this is an order of maginitude lower compared to the `LeastSquaresSVM`
+implementation. But then, again, this is expected.
+The `libSVM` solver is **sparse**, meaning that it only selects a couple of data
+instances as its _support vectors_.
+
+#### Time estimation
+
+By comparing with the previous _median_ value, this implementation is faster,
+and better.
+I kind of expected this result due to the fact the the `libSVM` solver is very
+_highly_ optimized code, and written almost entirely in C/C++.
+
+And by highly optimized code I mean that they use really clever tricks in various
+numerical computations throughout their implementation.
+
+But even so the `LeastSquaresSVM` implementation is very close. Not too shabby.
+"""
+
+# ╔═╡ f6c9278a-6009-11eb-300b-1fb5f3a9ad13
+md"""
+### With tuning. Setup and general info.
+
+The hyperparameter search is done with the [`Grid`](https://alan-turing-institute.github.io/MLJ.jl/dev/tuning_models/#MLJTuning.Grid)
+algorithm from `MLJ`, which is a conventional grid seach.
+
+The reason for this choice is simple: we want to be fair.
+
+Each model tunes its hyperparameters using 5-fold cross-validation on the
+_training_ set only.
+
+Each model has to tune **two** hyperparameters:
+
+- an _intrinsic_ one; _cost_ for the `libSVM` and _γ_ for the `LeastSquaresSVM`,
+- the kernel hyperparameter; both models are using the same RBF kernel.
+
+Each model will search for the best pair of hyperparameters in a grid of
+$[75 \times 75]$ for a total of 1500 points in the grid.
+"""
+
 # ╔═╡ 5e3c2068-5ffe-11eb-3173-59eb4527939f
-@benchmark train_lssvm_hp($Xstd, $y, $train)
+@benchmark train_lssvm_hp($Xstd, $y, $train) samples=3
 
 # ╔═╡ 66054bac-6002-11eb-063c-5525eb2a0ca1
 mach1 = train_lssvm_hp(Xstd, y, train);
@@ -205,21 +345,31 @@ acc2 = predict_model(y, test, mach2)
 
 
 # ╔═╡ Cell order:
-# ╠═b84726f0-6003-11eb-2e0d-6f14682c9588
+# ╟─b84726f0-6003-11eb-2e0d-6f14682c9588
+# ╟─5d73b9a0-6005-11eb-2ee6-2164f4169fea
 # ╠═01db1fc8-5ffd-11eb-0dae-cda0ff89e63d
 # ╠═143d4bd4-5ffe-11eb-23dc-1751a1913a05
+# ╟─6a111cfe-6005-11eb-15df-875c96454e44
 # ╠═281afffa-5ffd-11eb-24ce-219f746515da
 # ╠═6e9dcf16-5ffd-11eb-0523-e1cfd36fd57a
 # ╠═82244ce8-5ffd-11eb-003d-23214d962d20
 # ╠═878df3be-5ffd-11eb-2b19-7f74692d0189
+# ╟─8c358782-6005-11eb-2787-8b32b5749b57
 # ╠═2bbc10ce-6000-11eb-2162-398983b5cf48
+# ╟─cb51aff4-6005-11eb-1a7e-6b229f087a31
 # ╠═f6f1ffe8-6004-11eb-0d26-3d51bcb24d61
 # ╠═feaf46c8-6004-11eb-1fe3-7792a33bbc0e
 # ╠═92b48212-5ffd-11eb-3032-d1c9519703f2
 # ╠═5973126c-5ffe-11eb-2219-85731b9c0786
+# ╟─2ee014fc-6006-11eb-367a-dbc9f9f97225
 # ╠═5e76126c-5ffe-11eb-2b0b-6fe6136909c5
+# ╟─6f0d1bec-6006-11eb-106b-bd780f26fef9
 # ╠═0ab3cf70-6005-11eb-3f80-03a804a70776
+# ╟─ad027e4a-6006-11eb-3ae1-f11f7d5fecdd
+# ╟─85b1dd2c-6008-11eb-0689-9572c7411b30
 # ╠═0a75a496-6005-11eb-2135-eb8b6d4d106f
+# ╟─8ee94646-6008-11eb-089a-7b2ea0a9497b
+# ╠═f6c9278a-6009-11eb-300b-1fb5f3a9ad13
 # ╠═5e3c2068-5ffe-11eb-3173-59eb4527939f
 # ╠═66054bac-6002-11eb-063c-5525eb2a0ca1
 # ╠═5e286ffa-5ffe-11eb-22c3-2bba58505b97
