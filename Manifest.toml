@@ -168,6 +168,12 @@ uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 deps = ["Mmap"]
 uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 
+[[DiffRules]]
+deps = ["NaNMath", "Random", "SpecialFunctions"]
+git-tree-sha1 = "214c3fcac57755cfda163d91c58893a8723f93e9"
+uuid = "b552c78f-8df3-52c6-915a-8e097449b14b"
+version = "1.0.2"
+
 [[Distances]]
 deps = ["LinearAlgebra", "Statistics"]
 git-tree-sha1 = "50e7640007e5cb752addec3876f43d909cae22bd"
@@ -485,12 +491,12 @@ uuid = "7f8f8fb0-2700-5f03-b4bd-41f8cfc144b6"
 version = "0.4.1"
 
 [[LeastSquaresSVM]]
-deps = ["Distances", "Documenter", "KernelFunctions", "Krylov", "LinearAlgebra", "Literate", "MLJModelInterface"]
-git-tree-sha1 = "b00a0cbdb000b1fbc553a3fd1c3d68454de40f1c"
+deps = ["Distances", "Documenter", "KernelFunctions", "Krylov", "LinearAlgebra", "Literate", "MLJModelInterface", "Tullio"]
+git-tree-sha1 = "aa85197e415dbfb46e70416dd3f31ceb344005e2"
 repo-rev = "main"
 repo-url = "https://github.com/edwinb-ai/LeastSquaresSVM"
 uuid = "6bfd0e71-701c-47cd-9c90-5bf8fe84640d"
-version = "0.8.2"
+version = "0.9.3"
 
 [[LibGit2]]
 deps = ["Printf"]
@@ -803,9 +809,9 @@ version = "1.10.2"
 
 [[Pluto]]
 deps = ["Base64", "Dates", "Distributed", "FuzzyCompletions", "HTTP", "InteractiveUtils", "Logging", "Markdown", "MsgPack", "Pkg", "REPL", "Sockets", "Tables", "UUIDs"]
-git-tree-sha1 = "9400f74927970c2474a800bfa2ad8f26569dc294"
+git-tree-sha1 = "fe1fdbff28f179216a1e756bd5494057b036945f"
 uuid = "c3e4b0f8-55cb-11ea-2926-15256bba5781"
-version = "0.12.19"
+version = "0.12.20"
 
 [[PooledArrays]]
 deps = ["DataAPI"]
@@ -1054,6 +1060,12 @@ deps = ["Random", "Test"]
 git-tree-sha1 = "7c53c35547de1c5b9d46a4797cf6d8253807108c"
 uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
 version = "0.9.5"
+
+[[Tullio]]
+deps = ["DiffRules", "LinearAlgebra", "Requires"]
+git-tree-sha1 = "9ee255f09367011c87c0136638732b35a0687245"
+uuid = "bc48ee85-29a4-5162-ae0b-a64e1601d4bc"
+version = "0.2.11"
 
 [[UUIDs]]
 deps = ["Random", "SHA"]
